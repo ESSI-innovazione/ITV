@@ -13,6 +13,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import { signOut } from "@/app/login/actions";
 
 export type HeaderUser = {
   name: string;
@@ -92,7 +93,11 @@ export function Header({ title, user, profileHref }: HeaderProps) {
                 Profilo
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem render={<Link href="/logout" />}>
+              <DropdownMenuItem render={<Link href="/login" />}>
+                <UserRound className="size-4" />
+                Cambia utente
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => signOut()}>
                 <LogOut className="size-4" />
                 Esci
               </DropdownMenuItem>
@@ -100,6 +105,16 @@ export function Header({ title, user, profileHref }: HeaderProps) {
           </DropdownMenu>
         ) : (
           <Button render={<Link href="/login" />}>Accedi</Button>
+        )}
+
+        {user && (
+          // A real form submit (not a prefetchable link) so logout only happens on click.
+          <form action={signOut}>
+            <Button type="submit" variant="outline" size="sm" className="rounded-full">
+              <LogOut className="size-4" />
+              <span className="hidden sm:inline">Esci</span>
+            </Button>
+          </form>
         )}
       </div>
     </header>
