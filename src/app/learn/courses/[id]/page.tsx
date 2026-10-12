@@ -2,9 +2,11 @@ import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SlidePlayer } from "@/components/player/slide-player";
+import { ScormPlayer } from "@/components/player/scorm-player";
 import { ComingSoon } from "@/components/app/coming-soon";
 import { requireUser } from "@/lib/auth";
 import { getCourseForPlayer, getPlayerProgress } from "@/lib/learner";
+import { createClient } from "@/lib/supabase/server";
 
 export default function CoursePlayerPage({ params }: PageProps<"/learn/courses/[id]">) {
   return (
@@ -20,8 +22,25 @@ async function Player({ params }: { params: Promise<{ id: string }> }) {
   const [course, progress] = await Promise.all([getCourseForPlayer(id), getPlayerProgress(id, user.id)]);
   if (!course) notFound();
 
+  if (course.type === "scorm") {
+    const supabase = await createClient();
+    const { data: pkg } = await supabase.from("scorm_packages").select("id, version, entry_point").eq("course_id", id).order("created_at", { ascending: false }).limit(1).maybeSingle();
+    if (!pkg) return <ComingSoon title={course.title} spec="§8 (pacchetto mancante)" />;
+    const { data: rt } = await supabase.from("scorm_runtime").select("cmi").eq("package_id", pkg.id).eq("candidate_id", user.id).maybeSingle();
+    return (
+      <ScormPlayer
+        packageId={pkg.id}
+        version={pkg.version as "1.2" | "2004"}
+        entryPoint={pkg.entry_point}
+        title={course.title}
+        learner={{ id: user.id, name: user.name }}
+        initialCmi={(rt?.cmi as Record<string, unknown> | null) ?? null}
+      />
+    );
+  }
+
   if (course.type !== "slides") {
-    return <ComingSoon title={course.title} spec={course.type === "scroll" ? "§5.2 (reader)" : "§8 (SCORM)"} />;
+    return <ComingSoon title={course.title} spec="§5.2 (reader)" />;
   }
 
   return (
@@ -29,7 +48,7 @@ async function Player({ params }: { params: Promise<{ id: string }> }) {
       course={course}
       initialIndex={progress.index}
       initialViewed={progress.viewed}
-      serverTts={process.env.TTS_PROVIDER === "openai"}
+      serverTts={process.env.TTS_PROVIDER === "openai" || process.env.TTS_PROVIDER === "gemini"}
     />
   );
 }
