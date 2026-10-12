@@ -56,6 +56,12 @@ async function withModels<T>(kind: "main" | "fast", call: (modelId: string) => P
       } catch (e) {
         lastError = e;
         const msg = e instanceof Error ? e.message : String(e);
+        // A daily-quota message ("retry in Nh") will not clear by waiting a few seconds: skip the model now.
+        if (/free_tier|retry in \d+h/i.test(msg)) {
+          exhaustedUntil.set(id, Date.now() + EXHAUST_MS);
+          console.warn(`[ai] ${id} daily quota exhausted, skipping`);
+          break;
+        }
         if (isTransient(e) && attempt < QUOTA_RETRIES) {
           console.warn(`[ai] ${id} transient error (attempt ${attempt}), waiting ${QUOTA_WAIT_MS * attempt}ms: ${msg.slice(0, 80)}`);
           await sleep(QUOTA_WAIT_MS * attempt);
@@ -95,7 +101,27 @@ export async function generateStructured<T>(opts: StructuredOptions<T>): Promise
   });
 }
 
-/** Plain text generation (tutor, rewrites). */
+// Models that recently failed on quota are skipped for a while (free tier: per-model daily buckets).
+const exhaustedUntil = new Map<string, number>();
+const EXHAUST_MS = Number(process.env.LLM_EXHAUST_MS ?? 30 * 60_000);
+
+export function markModelFailed(id: string, error: unknown) {
+  if (isTransient(error)) exhaustedUntil.set(id, Date.now() + EXHAUST_MS);
+}
+
+/** First model in the chain not known to be exhausted, for streaming callers (tutor). */
+export function pickModel(kind: "main" | "fast"): { id: string; model: ReturnType<typeof google> } {
+  const ids = modelIds(kind);
+  const id = ids.find((m) => (exhaustedUntil.get(m) ?? 0) < Date.now()) ?? ids[0];
+  return { id, model: google(id) };
+}
+
+/** @deprecated use pickModel */
+export function getModel(kind: "main" | "fast") {
+  return pickModel(kind).model;
+}
+
+/** Plain text generation (rewrites). */
 export async function generatePlain(opts: { kind: "main" | "fast"; system: string; prompt: string; onUsage?: (u: Usage) => void }) {
   return withModels(opts.kind, async (id) => {
     const result = await generateText({

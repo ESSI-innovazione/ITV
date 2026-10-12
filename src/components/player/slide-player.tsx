@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import {
+  Bot,
   ChevronLeft,
   ChevronRight,
   ClipboardCheck,
@@ -27,8 +28,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Widget } from "@/components/app/widget";
 import { SlideCanvas } from "@/components/player/slide-canvas";
+import { TutorPanel } from "@/components/player/tutor-panel";
 import { useNarration } from "@/components/player/use-narration";
 import { recordSlideView } from "@/lib/actions/progress";
 import { cn } from "@/lib/utils";
@@ -55,6 +58,7 @@ export function SlidePlayer({ course, initialIndex, initialViewed, serverTts }: 
   const [showNotes, setShowNotes] = useState(true);
   const [fullscreen, setFullscreen] = useState(false);
   const [view, setView] = useState<"slides" | "gamma">("slides");
+  const [tutorOpen, setTutorOpen] = useState(false);
   const [, startTransition] = useTransition();
   const stageRef = useRef<HTMLDivElement>(null);
   const narration = useNarration({ serverTts });
@@ -247,6 +251,9 @@ export function SlidePlayer({ course, initialIndex, initialViewed, serverTts }: 
             </span>
 
             <div className="ml-auto flex items-center gap-2">
+              <Button variant="secondary" size="sm" onClick={() => setTutorOpen(true)}>
+                <Bot className="size-4" /> Chiedi al tutor
+              </Button>
               {gamma && (
                 <Button variant="outline" size="sm" onClick={() => { narration.stop(); setPlaying(false); setView("gamma"); }}>
                   <Presentation className="size-4" /> Deck Gamma
@@ -292,6 +299,32 @@ export function SlidePlayer({ course, initialIndex, initialViewed, serverTts }: 
             <p className={cn("text-sm leading-relaxed", narration.speaking && "text-foreground")}>{narrationText(slide)}</p>
           </Widget>
         )}
+
+        <Sheet open={tutorOpen} onOpenChange={setTutorOpen}>
+          <SheetContent side="right" className="flex w-full flex-col sm:max-w-md">
+            <SheetHeader>
+              <SheetTitle className="flex items-center gap-2">
+                <Bot className="size-5 text-primary" /> Tutor del corso
+              </SheetTitle>
+              <SheetDescription>Risposte basate solo sulle slide, con citazioni cliccabili.</SheetDescription>
+            </SheetHeader>
+            <div className="min-h-0 flex-1 px-4 pb-4">
+              <TutorPanel
+                courseId={course.id}
+                courseTitle={course.title}
+                onCite={(i) => {
+                  goTo(i);
+                  setTutorOpen(false);
+                }}
+                suggestions={[
+                  "Riassumi questa parte in 3 punti",
+                  `Spiegami meglio: ${slide.title}`,
+                  "Fammi un esempio pratico",
+                ]}
+              />
+            </div>
+          </SheetContent>
+        </Sheet>
 
         {isLast && (
           <Widget className="p-6">
