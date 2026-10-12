@@ -7,6 +7,7 @@ import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Widget } from "@/components/app/widget";
 import { requireUser } from "@/lib/auth";
+import { getAssignedCourses } from "@/lib/learner";
 import { createClient } from "@/lib/supabase/server";
 
 export const metadata = { title: "Dashboard" };
@@ -29,30 +30,16 @@ async function Dashboard() {
   const user = await requireUser();
   const supabase = await createClient();
 
-  const [{ data: ada }, { data: assignments }, { data: certificates }] = await Promise.all([
+  const [rows, { data: ada }, { data: certificates }] = await Promise.all([
+    getAssignedCourses(user.id),
     supabase.from("ada_profiles").select("overall, band").eq("candidate_id", user.id).maybeSingle(),
-    supabase
-      .from("assignments")
-      .select("id, due_at, course:courses(id, title, type, cover_url, duration_min), progress:courses(progress(status, percent))")
-      .eq("candidate_id", user.id)
-      .order("created_at", { ascending: false }),
     supabase.from("certificates").select("id, issued_at, course:courses(title)").eq("candidate_id", user.id).is("revoked_at", null),
   ]);
 
-  type Row = {
-    id: string;
-    due_at: string | null;
-    course: { id: string; title: string; type: string; cover_url: string | null; duration_min: number | null } | null;
-    progress: { progress: { status: string; percent: number }[] }[] | null;
-  };
-  const rows = ((assignments ?? []) as unknown as Row[]).map((a) => ({
-    ...a,
-    p: a.progress?.[0]?.progress?.[0] ?? { status: "not_started", percent: 0 },
-  }));
-
-  const completed = rows.filter((r) => r.p.status === "completed" || r.p.status === "certified").length;
-  const overall = rows.length ? Math.round(rows.reduce((s, r) => s + r.p.percent, 0) / rows.length) : 0;
-  const next = rows.find((r) => r.p.status === "in_progress") ?? rows.find((r) => r.p.status === "not_started");
+  const done = (s: string) => s === "completed" || s === "certified";
+  const completed = rows.filter((r) => done(r.progress.status)).length;
+  const overall = rows.length ? Math.round(rows.reduce((s, r) => s + r.progress.percent, 0) / rows.length) : 0;
+  const next = rows.find((r) => r.progress.status === "in_progress") ?? rows.find((r) => r.progress.status === "not_started");
   const band = ada ? bandLabel[ada.band] : null;
 
   return (
@@ -77,7 +64,7 @@ async function Dashboard() {
         </Widget>
 
         <Widget title="Continua da dove eri" className="md:col-span-2">
-          {next?.course ? (
+          {next ? (
             <div className="flex flex-wrap items-center gap-4">
               <span className="flex size-12 items-center justify-center rounded-xl bg-primary/15 text-primary">
                 <BookOpen className="size-6" />
@@ -85,13 +72,13 @@ async function Dashboard() {
               <div className="min-w-0 flex-1">
                 <p className="truncate font-medium">{next.course.title}</p>
                 <div className="mt-2 flex items-center gap-3">
-                  <Progress value={next.p.percent} className="h-1.5 flex-1" />
-                  <span className="text-xs text-muted-foreground">{next.p.percent}%</span>
+                  <Progress value={next.progress.percent} className="h-1.5 flex-1" />
+                  <span className="text-xs text-muted-foreground">{next.progress.percent}%</span>
                 </div>
               </div>
               <Button render={<Link href={`/learn/courses/${next.course.id}`} />}>
                 <Play className="size-4" />
-                {next.p.status === "in_progress" ? "Riprendi" : "Inizia"}
+                {next.progress.status === "in_progress" ? "Riprendi" : "Inizia"}
               </Button>
             </div>
           ) : (
@@ -106,18 +93,18 @@ async function Dashboard() {
         ) : (
           <ul className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
             {rows.slice(0, 6).map((r) => (
-              <li key={r.id} className="rounded-lg bg-muted p-4">
+              <li key={r.assignmentId} className="rounded-lg bg-muted p-4">
                 <div className="mb-3 flex items-start justify-between gap-2">
-                  <p className="font-medium leading-snug">{r.course?.title}</p>
-                  <StatusBadge status={r.p.status} />
+                  <p className="font-medium leading-snug">{r.course.title}</p>
+                  <StatusBadge status={r.progress.status} />
                 </div>
-                <Progress value={r.p.percent} className="h-1.5" />
+                <Progress value={r.progress.percent} className="h-1.5" />
                 <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
                   <span className="flex items-center gap-1">
                     <Clock className="size-3.5" />
-                    {r.course?.duration_min ? `${r.course.duration_min} min` : "—"}
+                    {r.course.durationMin ? `${r.course.durationMin} min` : "—"}
                   </span>
-                  <Link href={`/learn/courses/${r.course?.id}`} className="font-medium text-primary hover:underline">
+                  <Link href={`/learn/courses/${r.course.id}`} className="font-medium text-primary hover:underline">
                     Apri
                   </Link>
                 </div>

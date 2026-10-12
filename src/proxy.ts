@@ -45,6 +45,15 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
+  // Optimistic role gate for the Studio. `user_metadata.role` is set at invite/seed time;
+  // it is not authoritative (RLS + requireUser are), it just avoids serving the Studio shell to candidates.
+  if (user && pathname.startsWith("/studio") && user.user_metadata?.role === "candidate") {
+    const url = request.nextUrl.clone();
+    url.pathname = "/learn";
+    url.search = "";
+    return NextResponse.redirect(url);
+  }
+
   return response;
 }
 
