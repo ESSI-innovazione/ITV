@@ -23,6 +23,8 @@ export type PlayerCourse = {
   durationMin: number | null;
   slides: PlayerSlide[];
   quiz: { id: string; title: string } | null;
+  /** Latest completed Gamma deck, if any. */
+  gamma: { deckId: string; gammaId: string | null; gammaUrl: string | null; hasExport: boolean } | null;
 };
 
 export type AssignedCourse = {
@@ -105,6 +107,15 @@ export async function getCourseForPlayer(courseId: string): Promise<PlayerCourse
 
   const quizzes = data.quizzes ?? [];
 
+  const { data: deck } = await supabase
+    .from("gamma_decks")
+    .select("id, gamma_id, gamma_url, export_url")
+    .eq("course_id", courseId)
+    .eq("status", "done")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
   return {
     id: data.id,
     title: data.title,
@@ -113,6 +124,7 @@ export async function getCourseForPlayer(courseId: string): Promise<PlayerCourse
     durationMin: data.duration_min,
     slides,
     quiz: quizzes[0] ?? null,
+    gamma: deck ? { deckId: deck.id, gammaId: deck.gamma_id, gammaUrl: deck.gamma_url, hasExport: !!deck.export_url } : null,
   };
 }
 

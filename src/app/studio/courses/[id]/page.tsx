@@ -10,7 +10,8 @@ import { SlideCanvas } from "@/components/player/slide-canvas";
 import { requireUser, STAFF_ROLES } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import type { PlayerSlide } from "@/lib/learner";
-import { CourseActions, RegenerateSlideButton } from "./course-actions";
+import { CourseActions, GenerateGammaButton, RegenerateSlideButton } from "./course-actions";
+import { Download, ExternalLink, Presentation } from "lucide-react";
 
 export const maxDuration = 120;
 
@@ -57,6 +58,15 @@ async function Review({ params }: { params: Promise<{ id: string }> }) {
     .maybeSingle()) as unknown as { data: Raw | null };
   if (!data) notFound();
 
+  const { data: decks } = await supabase
+    .from("gamma_decks")
+    .select("id, status, gamma_id, gamma_url, export_url, error, credits_used, created_at")
+    .eq("course_id", id)
+    .order("created_at", { ascending: false })
+    .limit(1);
+  const deck = decks?.[0] ?? null;
+  const gammaBusy = deck?.status === "generating" || deck?.status === "queued";
+
   const modules = (data.modules ?? []).sort((a, b) => a.position - b.position);
   const quiz = data.quizzes?.[0] ?? null;
   const questions = (quiz?.questions ?? []).sort((a, b) => a.position - b.position);
@@ -86,6 +96,35 @@ async function Review({ params }: { params: Promise<{ id: string }> }) {
           <CourseActions courseId={data.id} status={data.status} />
         </div>
       </div>
+
+      <Widget title="Deck Gamma" actions={<GenerateGammaButton courseId={data.id} busy={gammaBusy} />}>
+        {!deck && <p className="text-sm text-muted-foreground">Nessun deck ancora. Gamma impagina le slide generate (testo preservato) e produce il PPTX scaricabile.</p>}
+        {deck?.status === "generating" && (
+          <p className="text-sm text-muted-foreground">Gamma sta impaginando il deck (1–3 minuti). Ricarica la pagina per aggiornare.</p>
+        )}
+        {deck?.status === "failed" && <p className="text-sm text-destructive">Errore Gamma: {deck.error}</p>}
+        {deck?.status === "done" && (
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge className="rounded-full bg-green/20 text-green">Pronto</Badge>
+              {deck.credits_used != null && <span className="text-xs text-muted-foreground">{deck.credits_used} crediti</span>}
+              {deck.export_url && (
+                <Button size="sm" render={<a href={`/api/gamma/${deck.id}/export`} />}>
+                  <Download className="size-4" /> Scarica PPTX
+                </Button>
+              )}
+              {deck.gamma_url && (
+                <Button size="sm" variant="outline" render={<a href={deck.gamma_url} target="_blank" rel="noopener" />}>
+                  <ExternalLink className="size-4" /> Apri in Gamma
+                </Button>
+              )}
+            </div>
+            {deck.gamma_id && (
+              <iframe src={`https://gamma.app/embed/${deck.gamma_id}`} title="Deck Gamma" className="aspect-video w-full rounded-lg" allowFullScreen />
+            )}
+          </div>
+        )}
+      </Widget>
 
       {modules.map((m, mi) => (
         <Widget key={m.id} title={`Modulo ${mi + 1} · ${m.title}`}>

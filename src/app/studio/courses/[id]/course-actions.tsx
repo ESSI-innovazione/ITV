@@ -13,6 +13,26 @@ import {
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { regenerateSlideAction, setCourseStatus } from "@/lib/actions/generation";
+import { generateGammaAction } from "@/lib/actions/gamma";
+import { Presentation } from "lucide-react";
+
+export function GenerateGammaButton({ courseId, busy }: { courseId: string; busy: boolean }) {
+  const [pending, start] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+  return (
+    <div className="flex items-center gap-2">
+      <Button
+        variant="outline"
+        disabled={pending || busy}
+        onClick={() => start(async () => { const r = await generateGammaAction(courseId); if (!r.ok) setError(r.error); })}
+      >
+        {pending || busy ? <Loader2 className="size-4 animate-spin" /> : <Presentation className="size-4" />}
+        {busy ? "Gamma in corso…" : "Genera deck Gamma"}
+      </Button>
+      {error && <span className="text-xs text-destructive">{error}</span>}
+    </div>
+  );
+}
 
 export function CourseActions({ courseId, status }: { courseId: string; status: string }) {
   const [pending, start] = useTransition();

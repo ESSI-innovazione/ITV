@@ -6,10 +6,14 @@ import {
   ChevronLeft,
   ChevronRight,
   ClipboardCheck,
+  Download,
+  ExternalLink,
+  LayoutGrid,
   Maximize2,
   Minimize2,
   Pause,
   Play,
+  Presentation,
   ScrollText,
   Volume2,
 } from "lucide-react";
@@ -50,6 +54,7 @@ export function SlidePlayer({ course, initialIndex, initialViewed, serverTts }: 
   const [playing, setPlaying] = useState(false);
   const [showNotes, setShowNotes] = useState(true);
   const [fullscreen, setFullscreen] = useState(false);
+  const [view, setView] = useState<"slides" | "gamma">("slides");
   const [, startTransition] = useTransition();
   const stageRef = useRef<HTMLDivElement>(null);
   const narration = useNarration({ serverTts });
@@ -133,6 +138,46 @@ export function SlidePlayer({ course, initialIndex, initialViewed, serverTts }: 
     return <Widget className="p-10 text-center text-muted-foreground">Questo corso non ha ancora diapositive.</Widget>;
   }
 
+  const gamma = course.gamma;
+
+  if (view === "gamma" && gamma) {
+    return (
+      <div className="space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="truncate text-lg font-semibold">{course.title}</h2>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={() => setView("slides")}>
+              <LayoutGrid className="size-4" /> Slide narrate
+            </Button>
+            {gamma.hasExport && (
+              <Button size="sm" render={<a href={`/api/gamma/${gamma.deckId}/export`} />}>
+                <Download className="size-4" /> Scarica PPTX
+              </Button>
+            )}
+            {gamma.gammaUrl && (
+              <Button variant="ghost" size="sm" render={<a href={gamma.gammaUrl} target="_blank" rel="noopener" />}>
+                <ExternalLink className="size-4" /> Apri in Gamma
+              </Button>
+            )}
+          </div>
+        </div>
+        {gamma.gammaId ? (
+          <div className="widget overflow-hidden">
+            <iframe
+              src={`https://gamma.app/embed/${gamma.gammaId}`}
+              title={`Deck Gamma – ${course.title}`}
+              className="aspect-video w-full"
+              allow="fullscreen"
+              allowFullScreen
+            />
+          </div>
+        ) : (
+          <Widget className="p-10 text-center text-muted-foreground">Il deck è pronto: aprilo in Gamma con il pulsante qui sopra.</Widget>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="grid gap-6 lg:grid-cols-[160px_1fr]">
       {/* Thumbnails */}
@@ -202,6 +247,11 @@ export function SlidePlayer({ course, initialIndex, initialViewed, serverTts }: 
             </span>
 
             <div className="ml-auto flex items-center gap-2">
+              {gamma && (
+                <Button variant="outline" size="sm" onClick={() => { narration.stop(); setPlaying(false); setView("gamma"); }}>
+                  <Presentation className="size-4" /> Deck Gamma
+                </Button>
+              )}
               <DropdownMenu>
                 <DropdownMenuTrigger className="rounded-md border px-2.5 py-1.5 text-xs outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring">
                   {narration.rate}×

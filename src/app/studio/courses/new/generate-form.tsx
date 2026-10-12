@@ -23,7 +23,7 @@ const BANDS = [
 const STEPS: Array<{ key: JobView["status"][]; label: string; icon: typeof Search }> = [
   { key: ["queued", "outlining"], label: "Ricerca fonti e struttura", icon: Search },
   { key: ["writing"], label: "Scrittura slide e narrazione", icon: Sparkles },
-  { key: ["quiz", "gamma"], label: "Quiz finale", icon: Check },
+  { key: ["quiz", "gamma"], label: "Quiz finale e deck Gamma", icon: Check },
   { key: ["done"], label: "Pronto per la revisione", icon: Check },
 ];
 
@@ -37,6 +37,7 @@ export function GenerateForm() {
   const [useWebResearch, setUseWebResearch] = useState(true);
   const [generateQuiz, setGenerateQuiz] = useState(true);
   const [issueCertificate, setIssueCertificate] = useState(true);
+  const [generateGamma, setGenerateGamma] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [jobId, setJobId] = useState<string | null>(null);
   const [job, setJob] = useState<JobView | null>(null);
@@ -63,7 +64,7 @@ export function GenerateForm() {
       setError(null);
       const r = await startGeneration({
         topic, brief: brief || undefined, sourceText: sourceText || undefined,
-        language: "it", durationMin, bands, useWebResearch, generateQuiz, generateGamma: false, issueCertificate,
+        language: "it", durationMin, bands, useWebResearch, generateQuiz, generateGamma, issueCertificate,
         type: params.get("type") ?? "slides",
       });
       if (!r.ok) return setError(r.error);
@@ -117,7 +118,7 @@ export function GenerateForm() {
               <Toggle label="Ricerca fonti sul web (Tavily)" checked={useWebResearch} onChange={setUseWebResearch} disabled={running} />
               <Toggle label="Genera quiz finale" checked={generateQuiz} onChange={setGenerateQuiz} disabled={running} />
               <Toggle label="Rilascia certificato al superamento" checked={issueCertificate} onChange={setIssueCertificate} disabled={running} />
-              <Toggle label="Genera deck Gamma (presto)" checked={false} onChange={() => {}} disabled />
+              <Toggle label="Genera deck Gamma (PPTX, usa crediti)" checked={generateGamma} onChange={setGenerateGamma} disabled={running} />
             </div>
           </div>
 

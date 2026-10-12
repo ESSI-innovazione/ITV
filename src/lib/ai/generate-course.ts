@@ -1,5 +1,6 @@
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
+import { generateGammaDeck } from "@/lib/ai/gamma-deck";
 import { generateStructured, type Usage } from "@/lib/ai/provider";
 import { researchTopic, type Source } from "@/lib/ai/research";
 import {
@@ -15,7 +16,7 @@ import {
 } from "@/lib/ai/schemas";
 
 type Supa = Awaited<ReturnType<typeof createClient>>;
-type BandProgress = "outline" | "slides" | "quiz" | "done";
+type BandProgress = "outline" | "slides" | "quiz" | "gamma" | "done";
 
 const SYSTEM = `Sei un instructional designer senior di ITV Academy e crei corsi e-learning in italiano.
 Scrivi contenuti accurati, concreti e verificabili; quando citi norme usa riferimenti precisi (articolo, decreto).
@@ -146,6 +147,11 @@ async function generateForBand({ supabase, input, band, context, createdBy, mult
     allSlides.push(...moduleSlides[mi].slides.map((s) => ({ title: s.title, bullets: s.bullets })));
   }
 
+  // Gamma takes 1–3 min and is independent of the quiz: run it alongside.
+  const gammaStep = input.generateGamma
+    ? generateGammaDeck(course.id, supabase).catch((e) => console.warn("[gamma] deck failed:", e instanceof Error ? e.message : e))
+    : Promise.resolve();
+
   if (input.generateQuiz) {
     await onProgress("quiz");
     const slideText = allSlides.map((s) => `- ${s.title}: ${s.bullets.join(" | ")}`).join("\n");
@@ -188,12 +194,18 @@ async function generateForBand({ supabase, input, band, context, createdBy, mult
     if (qsErr) throw new Error(`Impossibile salvare le domande: ${qsErr.message}`);
   }
 
+  if (input.generateGamma) {
+    await onProgress("gamma");
+    await gammaStep;
+  }
+
   await onProgress("done");
   return course.id;
 }
 
 function overallStatus(progress: Record<string, BandProgress>) {
   const values = Object.values(progress);
+  if (values.some((v) => v === "gamma")) return "gamma";
   if (values.some((v) => v === "quiz")) return "quiz";
   if (values.some((v) => v === "slides")) return "writing";
   return "outlining";
@@ -244,7 +256,7 @@ export async function runGenerationJob(jobId: string) {
 }
 
 function stepText(progress: Record<string, BandProgress>) {
-  const label: Record<BandProgress, string> = { outline: "struttura", slides: "slide", quiz: "quiz", done: "fatto" };
+  const label: Record<BandProgress, string> = { outline: "struttura", slides: "slide", quiz: "quiz", gamma: "deck Gamma", done: "fatto" };
   return Object.entries(progress).map(([b, p]) => `${BAND_RULES[b as Band].label}: ${label[p]}`).join(" · ");
 }
 
